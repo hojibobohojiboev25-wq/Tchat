@@ -50,7 +50,9 @@ async function bootstrap() {
   });
   app.use("/api/rooms", roomRoutes);
 
-  app.use(express.static(path.join(__dirname, "..", "..", "client")));
+  const clientDir = path.join(__dirname, "..", "..", "client");
+  app.use(express.static(clientDir));
+  app.use("/client", express.static(clientDir));
 
   app.get("*", (_req, res) => {
     res.sendFile(path.join(__dirname, "..", "..", "client", "index.html"));
