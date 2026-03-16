@@ -15,11 +15,12 @@
       "handle": "filesystem"
     },
     {
-      "src": "/api/runtime-config",
-      "dest": "/api/runtime-config.js"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
       "src": "/(.*)",
+      "methods": ["GET", "HEAD"],
       "dest": "/client/index.html"
     }
   ]
