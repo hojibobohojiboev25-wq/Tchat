@@ -81,6 +81,17 @@ input {
   background: #cbd5e1;
 }
 
+.btn-start {
+  width: 100%;
+  margin-bottom: 10px;
+  background: #34d399;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .videos {
   margin-top: 16px;
   display: grid;

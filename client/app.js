@@ -4,6 +4,7 @@ const remoteStatusEl = document.getElementById("remoteStatus");
 const statusEl = document.getElementById("status");
 const roomIdInput = document.getElementById("roomIdInput");
 const roomHintEl = document.getElementById("roomHint");
+const startChatBtn = document.getElementById("startChatBtn");
 const createRoomBtn = document.getElementById("createRoomBtn");
 const joinRoomBtn = document.getElementById("joinRoomBtn");
 const toggleCameraBtn = document.getElementById("toggleCameraBtn");
@@ -18,6 +19,7 @@ let currentRoomId = "";
 let targetPeerId = "";
 let pollTimer = null;
 let lastSignalId = 0;
+let booted = false;
 const selfPeerId = (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(
   0,
   24
@@ -73,11 +75,25 @@ async function loadRuntimeConfig() {
 }
 
 async function startLocalMedia() {
-  localStream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "user" },
-    audio: true
-  });
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Ваш браузер не поддерживает getUserMedia");
+  }
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: true
+    });
+  } catch (_firstError) {
+    // Fallback constraints improve compatibility on older Android/iOS devices.
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    });
+  }
+
   localVideoEl.srcObject = localStream;
+  await localVideoEl.play().catch(() => {});
   updateStatus("камера и микрофон активированы");
 }
 
@@ -251,6 +267,9 @@ function toggleTrack(kind) {
 
 createRoomBtn.addEventListener("click", async () => {
   try {
+    if (!booted) {
+      await boot();
+    }
     const roomId = await createRoom();
     await joinRoom(roomId);
   } catch (error) {
@@ -260,6 +279,9 @@ createRoomBtn.addEventListener("click", async () => {
 
 joinRoomBtn.addEventListener("click", async () => {
   try {
+    if (!booted) {
+      await boot();
+    }
     await joinRoom(roomIdInput.value.trim());
   } catch (error) {
     updateStatus(`ошибка: ${error.message}`);
@@ -279,10 +301,18 @@ window.addEventListener("beforeunload", () => {
 });
 
 async function boot() {
+  if (booted) {
+    return;
+  }
+
   try {
+    startChatBtn.disabled = true;
+    updateStatus("запрашиваем доступ к камере и микрофону...");
     await loadRuntimeConfig();
     await startLocalMedia();
     resetPeerConnection();
+    booted = true;
+    updateStatus("медиа включено, можно подключаться");
 
     const roomFromUrl = new URLSearchParams(window.location.search).get("room");
     if (roomFromUrl) {
@@ -293,8 +323,19 @@ async function boot() {
     const roomId = await createRoom();
     await joinRoom(roomId);
   } catch (error) {
+    startChatBtn.disabled = false;
+    if (error?.name === "NotAllowedError") {
+      updateStatus("доступ к камере запрещен. Разрешите камеру/микрофон в настройках браузера.");
+      return;
+    }
+    if (error?.name === "NotFoundError") {
+      updateStatus("камера не найдена на устройстве.");
+      return;
+    }
     updateStatus(`ошибка запуска: ${error.message}`);
   }
 }
 
-boot();
+startChatBtn.addEventListener("click", () => {
+  boot();
+});

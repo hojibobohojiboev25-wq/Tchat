@@ -1,4 +1,4 @@
-const { initSchema, pool } = require("./_db");
+const { cleanupOldData, ensureSchema, pool } = require("./_db");
 const { sendJson } = require("./_utils");
 
 module.exports = async (req, res) => {
@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    await initSchema();
+    await ensureSchema();
 
     const roomId = String(req.query.roomId || "");
     const peerId = String(req.query.peerId || "");
@@ -54,6 +54,9 @@ module.exports = async (req, res) => {
     );
 
     const peerLeft = peerCountResult.rows[0].count <= 1;
+    if (Math.random() < 0.02) {
+      await cleanupOldData();
+    }
     return sendJson(res, 200, { signals: signalsResult.rows, peerLeft });
   } catch (error) {
     return sendJson(res, 500, { error: error.message });

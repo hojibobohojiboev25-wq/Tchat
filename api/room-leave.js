@@ -1,4 +1,4 @@
-const { initSchema, pool } = require("./_db");
+const { ensureSchema, pool } = require("./_db");
 const { sendJson } = require("./_utils");
 
 module.exports = async (req, res) => {
@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    await initSchema();
+    await ensureSchema();
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
     const { roomId, peerId } = body;
     if (!roomId || !peerId) {

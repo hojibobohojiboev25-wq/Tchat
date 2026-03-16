@@ -71,6 +71,17 @@ Tchat/
 - `POST /api/rooms` - создать комнату
 - `GET /api/rooms/:roomId` - состояние комнаты
 
+## Vercel-only API (без отдельного Socket.IO сервера)
+
+- `GET /api/health` - healthcheck Vercel API + DB
+- `POST /api/room-create` - создать комнату
+- `POST /api/room-join` - войти в комнату
+- `POST /api/room-leave` - выйти из комнаты
+- `POST /api/signal-send` - отправить WebRTC сигнал
+- `GET /api/signal-poll` - получить новые сигналы (polling)
+
+На мобильных устройствах сначала нажмите кнопку "Начать чат", чтобы камера/микрофон были запрошены по пользовательскому действию.
+
 ## Деплой на VPS/облако
 
 - Приложение слушает `0.0.0.0` и готово к reverse proxy (Nginx/Caddy).

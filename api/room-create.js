@@ -1,4 +1,4 @@
-const { initSchema, pool } = require("./_db");
+const { ensureSchema, pool } = require("./_db");
 const { sendJson, randomRoomId } = require("./_utils");
 
 module.exports = async (req, res) => {
@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    await initSchema();
+    await ensureSchema();
     const roomId = randomRoomId();
     await pool.query("INSERT INTO rooms (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [roomId]);
     return sendJson(res, 201, { roomId });
