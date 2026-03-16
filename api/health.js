@@ -1,16 +1,28 @@
 const { ensureSchema, pool } = require("./_db");
-const { sendJson } = require("./_utils");
+const { getRequestId, logEvent, sendError, sendJson } = require("./_utils");
 
 module.exports = async (req, res) => {
+  const requestId = getRequestId(req);
   if (req.method !== "GET") {
-    return sendJson(res, 405, { error: "Method not allowed" });
+    return sendError(res, 405, "Method not allowed", requestId);
   }
 
   try {
     await ensureSchema();
-    await pool.query("SELECT 1");
-    return sendJson(res, 200, { ok: true, service: "tchat-vercel-api" });
+    const db = await pool.query("SELECT NOW() AS now");
+    return sendJson(
+      res,
+      200,
+      {
+        ok: true,
+        service: "tchat-vercel-api",
+        dbTime: db.rows[0].now,
+        requestId
+      },
+      requestId
+    );
   } catch (error) {
-    return sendJson(res, 500, { ok: false, error: error.message });
+    logEvent("health_error", { requestId, message: error.message });
+    return sendError(res, 500, "Healthcheck failed", requestId);
   }
 };

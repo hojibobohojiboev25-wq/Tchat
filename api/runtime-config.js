@@ -1,3 +1,5 @@
+const { getRequestId, sendJson } = require("./_utils");
+
 const parseIceServers = () => {
   const stunUrls = (process.env.STUN_URLS || "stun:stun.l.google.com:19302")
     .split(",")
@@ -17,10 +19,20 @@ const parseIceServers = () => {
   return iceServers;
 };
 
-module.exports = (_req, res) => {
+module.exports = (req, res) => {
+  const requestId = getRequestId(req);
+  if (req.method !== "GET") {
+    return sendJson(res, 405, { error: "Method not allowed", requestId }, requestId);
+  }
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({
-    apiBaseUrl: process.env.API_BASE_URL || "",
-    iceServers: parseIceServers()
-  });
+  return sendJson(
+    res,
+    200,
+    {
+      ok: true,
+      apiBaseUrl: process.env.API_BASE_URL || "",
+      iceServers: parseIceServers()
+    },
+    requestId
+  );
 };

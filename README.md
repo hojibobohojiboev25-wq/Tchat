@@ -1,128 +1,100 @@
 # Tchat
 
-Полноценный MVP видеочата без регистрации на базе WebRTC + Socket.IO.
+Полноценный видеочат-продукт на Vercel + Neon PostgreSQL.
 
-## Возможности
+## Что умеет сейчас
 
-- Мгновенный вход в чат без аккаунта.
-- Локальное и удаленное видео в одном интерфейсе.
-- Вкл/выкл камеры и микрофона.
-- P2P WebRTC-соединение через STUN, с архитектурной поддержкой TURN.
-- Сигналинг через Socket.IO.
-- REST API для управления комнатами.
-- Логирование HTTP и socket событий через `morgan` + `winston`.
-- Хранение комнат/сессий в SQLite (по умолчанию) или PostgreSQL (опционально через `DATABASE_URL`).
+- Профиль пользователя перед входом (handle, display name, avatar URL).
+- Лобби с онлайн-участниками.
+- Инвайты: отправить, принять, отклонить.
+- 1:1 видеозвонок после принятия приглашения.
+- WebRTC P2P (STUN/TURN), сигналинг через Vercel API polling.
+- Сохранение состояния в БД: пользователи, presence, invitations, call sessions, signals.
+- Базовая защита: валидация payload, ограничение частоты invite/send, idempotency у сигналинга.
+- Мобильная устойчивость: запуск медиа по user-gesture, fallback constraints, recover после offline/online.
 
-## Структура
+## Архитектура
 
-```text
-Tchat/
-  client/
-    index.html
-    styles.css
-    app.js
-  server/
-    src/
-      db/index.js
-      logger.js
-      routes/rooms.js
-      services/roomService.js
-      socket/signaling.js
-      index.js
-  utils/
-    room.js
-  config/
-    default.js
-  .env.example
-  package.json
-```
+- `client/*` - SPA на чистом ES6.
+- `api/*` - Vercel serverless endpoints.
+- `PostgreSQL (Neon)` - источник истины для realtime-состояния.
 
-## Быстрый старт
+## Быстрый старт (локально)
 
-1. Установите зависимости:
+1. Установить зависимости:
    ```bash
    npm install
    ```
-2. Создайте `.env`:
+2. Создать `.env`:
    ```bash
    copy .env.example .env
    ```
-3. При необходимости заполните `DATABASE_URL` (для PostgreSQL) и TURN параметры.
-4. Запустите:
+3. Заполнить минимум:
+   - `DATABASE_URL`
+4. Запустить:
    ```bash
    npm run dev
    ```
-5. Откройте `http://localhost:3000`.
+5. Открыть:
+   - `http://localhost:3000`
 
 ## Переменные окружения
 
-- `PORT` - порт сервера (по умолчанию `3000`)
-- `NODE_ENV` - окружение (`development`/`production`)
-- `LOG_LEVEL` - уровень логирования
-- `DATABASE_URL` - PostgreSQL строка подключения (если не задано, используется SQLite)
-- `STUN_URLS` - STUN серверы через запятую
-- `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` - TURN параметры
+- `DATABASE_URL` (обязательно для Vercel API)
+- `API_BASE_URL` (опционально, если API находится на другом домене)
+- `STUN_URLS`
+- `TURN_URL`
+- `TURN_USERNAME`
+- `TURN_CREDENTIAL`
+- `NODE_ENV`
+- `PORT` (для локального Node-сервера)
 
 ## REST API
 
-- `GET /api/health` - проверка доступности сервиса
-- `GET /api/webrtc-config` - конфигурация ICE серверов
-- `GET /api/runtime-config` - runtime-конфиг клиента (API URL, signaling URL, ICE)
-- `POST /api/rooms` - создать комнату
-- `GET /api/rooms/:roomId` - состояние комнаты
+### Service
+- `GET /api/health`
+- `GET /api/runtime-config`
 
-## Vercel-only API (без отдельного Socket.IO сервера)
+### Profile / Presence
+- `POST /api/profile/create-or-update`
+- `GET /api/profile/me?userId=...`
+- `POST /api/presence/heartbeat`
+- `GET /api/users/online?userId=...`
 
-- `GET /api/health` - healthcheck Vercel API + DB
-- `POST /api/room-create` - создать комнату
-- `POST /api/room-join` - войти в комнату
-- `POST /api/room-leave` - выйти из комнаты
-- `POST /api/signal-send` - отправить WebRTC сигнал
-- `GET /api/signal-poll` - получить новые сигналы (polling)
+### Invite / Call
+- `POST /api/invite/send`
+- `POST /api/invite/respond`
+- `GET /api/invite/inbox?userId=...&after=...`
+- `POST /api/call/start-from-invite`
+- `POST /api/call/end`
 
-На мобильных устройствах сначала нажмите кнопку "Начать чат", чтобы камера/микрофон были запрошены по пользовательскому действию.
+### Signaling
+- `POST /api/signal/send`
+- `GET /api/signal/poll?callSessionId=...&userId=...&afterId=...`
 
-## Деплой на VPS/облако
+## Vercel deploy runbook
 
-- Приложение слушает `0.0.0.0` и готово к reverse proxy (Nginx/Caddy).
-- Для production используйте процесс-менеджер (например `pm2`) и HTTPS.
-- Для TURN в production рекомендуется поднять собственный coturn-сервер.
+1. Импортируйте GitHub репозиторий в Vercel.
+2. В `Project Settings -> Environment Variables` задайте:
+   - `DATABASE_URL=postgresql://...`
+   - `STUN_URLS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302`
+   - (опционально) `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`
+   - (опционально) `API_BASE_URL` если API отделен от frontend
+3. Нажмите `Redeploy`.
+4. Проверка:
+   - `https://<project>.vercel.app/api/health`
+   - `https://<project>.vercel.app/api/runtime-config`
 
-## Деплой с Vercel + GitHub
+## Мобильный сценарий
 
-Vercel не подходит для постоянного Socket.IO/WebSocket сигналинг-сервера в serverless-режиме.  
-Рекомендуемая схема:
+- Открывать в Safari/Chrome, не во встроенном webview мессенджеров.
+- Нажать кнопку входа в платформу (это user gesture для разрешений).
+- Разрешить camera/microphone.
+- Выбрать собеседника в лобби и отправить приглашение.
 
-- `frontend` (`client`) — хостится на Vercel;
-- `backend` (`server`) — хостится на VPS/Railway/Render/Fly.io.
+## Безопасность
 
-### 1) Backend (Node.js) деплой
-
-Задайте env на backend-хостинге:
-
-- `PORT=3000`
-- `NODE_ENV=production`
-- `DATABASE_URL=...` (ваш Neon URL)
-- `STUN_URLS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302`
-- `SIGNALING_URL=https://your-backend-domain.com`
-- `API_BASE_URL=https://your-backend-domain.com`
-
-### 2) Frontend (Vercel) деплой
-
-В репозитории уже есть `vercel.json` и serverless функция `api/runtime-config.js`.
-
-В Vercel Project Settings -> Environment Variables задайте:
-
-- `API_BASE_URL=https://your-backend-domain.com`
-- `SIGNALING_URL=https://your-backend-domain.com`
-- `STUN_URLS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302`
-- при наличии TURN: `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`
-
-После deploy фронтенд загрузит конфиг с `/api/runtime-config` и подключится к вашему backend.
-
-## Безопасность URL и секретов
-
-- Никогда не коммитьте `.env` в GitHub.
-- Все секреты (`DATABASE_URL`, TURN креды) храните только в env переменных хостинга.
-- Для Neon используйте отдельного пользователя с минимальными правами.
-- Включите HTTPS на frontend и backend (иначе WebRTC/camera работают нестабильно).
+- Не коммитить `.env`.
+- Хранить секреты только в Vercel/Neon environment variables.
+- Использовать HTTPS (Vercel уже даёт).
+- Рекомендовано периодически ротировать пароль `DATABASE_URL`.

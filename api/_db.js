@@ -16,36 +16,78 @@ async function initSchema() {
   if (!pool) {
     throw new Error("DATABASE_URL is required for Vercel backend");
   }
+
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS rooms (
+    CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      handle TEXT UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      avatar_url TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS room_peers (
-      room_id TEXT NOT NULL,
-      peer_id TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS presence (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'online',
+      device_info JSONB,
       last_seen TIMESTAMP NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (room_id, peer_id)
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS invitations (
+      id TEXT PRIMARY KEY,
+      from_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      responded_at TIMESTAMP,
+      CHECK (from_user_id <> to_user_id)
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS call_sessions (
+      id TEXT PRIMARY KEY,
+      invitation_id TEXT REFERENCES invitations(id) ON DELETE SET NULL,
+      caller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      callee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'active',
+      started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      ended_at TIMESTAMP,
+      ended_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      end_reason TEXT
     );
   `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS signals (
       id BIGSERIAL PRIMARY KEY,
-      room_id TEXT NOT NULL,
-      from_peer_id TEXT NOT NULL,
-      to_peer_id TEXT NOT NULL,
+      call_session_id TEXT NOT NULL REFERENCES call_sessions(id) ON DELETE CASCADE,
+      from_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       type TEXT NOT NULL,
       payload JSONB NOT NULL,
+      idempotency_key TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
 
-  await pool.query("CREATE INDEX IF NOT EXISTS idx_signals_room_to_id ON signals (room_id, to_peer_id, id)");
-  await pool.query("CREATE INDEX IF NOT EXISTS idx_room_peers_last_seen ON room_peers (room_id, last_seen)");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_presence_last_seen ON presence (last_seen)");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_invitations_to_status ON invitations (to_user_id, status, updated_at DESC)");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_invitations_from_status ON invitations (from_user_id, status, updated_at DESC)");
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_call_sessions_active_users ON call_sessions (status, caller_id, callee_id, started_at DESC)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_signals_session_to_id ON signals (call_session_id, to_user_id, id)"
+  );
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_idempotency ON signals (idempotency_key)");
 }
 
 async function ensureSchema() {
@@ -61,12 +103,34 @@ async function ensureSchema() {
 
 async function cleanupOldData() {
   await ensureSchema();
-  await pool.query("DELETE FROM signals WHERE created_at < NOW() - INTERVAL '10 minutes'");
-  await pool.query("DELETE FROM room_peers WHERE last_seen < NOW() - INTERVAL '3 minutes'");
+  await pool.query("DELETE FROM signals WHERE created_at < NOW() - INTERVAL '20 minutes'");
+  await pool.query("DELETE FROM presence WHERE last_seen < NOW() - INTERVAL '5 minutes'");
+  await pool.query(
+    "UPDATE call_sessions SET status = 'ended', ended_at = NOW(), end_reason = 'timeout' WHERE status = 'active' AND started_at < NOW() - INTERVAL '8 hours'"
+  );
+}
+
+async function withTransaction(run) {
+  if (!pool) {
+    throw new Error("DATABASE_URL is required for Vercel backend");
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await run(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 module.exports = {
   pool,
   ensureSchema,
-  cleanupOldData
+  cleanupOldData,
+  withTransaction
 };

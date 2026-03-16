@@ -23,6 +23,50 @@
       "dest": "/api/health.js"
     },
     {
+      "src": "/api/profile/create-or-update",
+      "dest": "/api/profile-create-or-update.js"
+    },
+    {
+      "src": "/api/profile/me",
+      "dest": "/api/profile-me.js"
+    },
+    {
+      "src": "/api/presence/heartbeat",
+      "dest": "/api/presence-heartbeat.js"
+    },
+    {
+      "src": "/api/users/online",
+      "dest": "/api/users-online.js"
+    },
+    {
+      "src": "/api/invite/send",
+      "dest": "/api/invite-send.js"
+    },
+    {
+      "src": "/api/invite/respond",
+      "dest": "/api/invite-respond.js"
+    },
+    {
+      "src": "/api/invite/inbox",
+      "dest": "/api/invite-inbox.js"
+    },
+    {
+      "src": "/api/call/start-from-invite",
+      "dest": "/api/call-start-from-invite.js"
+    },
+    {
+      "src": "/api/call/end",
+      "dest": "/api/call-end.js"
+    },
+    {
+      "src": "/api/signal/send",
+      "dest": "/api/signal-send.js"
+    },
+    {
+      "src": "/api/signal/poll",
+      "dest": "/api/signal-poll.js"
+    },
+    {
       "src": "/api/room-create",
       "dest": "/api/room-create.js"
     },

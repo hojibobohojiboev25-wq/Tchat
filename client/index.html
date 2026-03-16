@@ -10,39 +10,69 @@
     <main class="app">
       <header class="topbar">
         <h1>Tchat</h1>
-        <p class="subtitle">Мгновенный видеочат без регистрации</p>
+        <p class="subtitle">Найдите собеседника и начните безопасный видеозвонок</p>
       </header>
 
-      <section class="room-panel">
-        <button id="startChatBtn" class="btn btn-start">Начать чат (камера/микрофон)</button>
-        <p class="room-hint">На телефоне сначала нажмите эту кнопку, затем разрешите доступ.</p>
-        <label class="room-label" for="roomIdInput">Комната</label>
-        <div class="room-controls">
-          <input id="roomIdInput" type="text" placeholder="Введите ID комнаты" />
-          <button id="createRoomBtn" class="btn btn-light">Создать</button>
-          <button id="joinRoomBtn" class="btn">Подключиться</button>
+      <section id="profileSection" class="panel">
+        <h2>Профиль</h2>
+        <p class="muted">Заполните профиль перед входом в список участников.</p>
+        <div class="grid-two">
+          <label class="field">
+            <span>Ваш ник (латиница/цифры)</span>
+            <input id="handleInput" type="text" placeholder="например, ali_01" maxlength="24" />
+          </label>
+          <label class="field">
+            <span>Отображаемое имя</span>
+            <input id="displayNameInput" type="text" placeholder="Например, Ali" maxlength="40" />
+          </label>
         </div>
-        <p id="roomHint" class="room-hint">Поделитесь ID комнаты с собеседником.</p>
+        <label class="field">
+          <span>Аватар URL (опционально)</span>
+          <input id="avatarInput" type="url" placeholder="https://example.com/avatar.jpg" maxlength="300" />
+        </label>
+        <button id="saveProfileBtn" class="btn">Войти в платформу</button>
       </section>
 
-      <section class="videos">
-        <article class="video-card">
-          <h2>Вы</h2>
-          <video id="localVideo" autoplay muted playsinline></video>
+      <section id="lobbySection" class="panel hidden">
+        <div class="row-between">
+          <div>
+            <h2>Участники онлайн</h2>
+            <p id="welcomeText" class="muted"></p>
+          </div>
+          <button id="refreshUsersBtn" class="btn btn-light">Обновить</button>
+        </div>
+        <div id="onlineList" class="user-list"></div>
+        <p id="lobbyEmptyText" class="muted hidden">Сейчас никого нет онлайн.</p>
+      </section>
+
+      <section id="callSection" class="panel hidden">
+        <div class="row-between">
+          <h2>Звонок</h2>
+          <button id="endCallBtn" class="btn btn-danger">Завершить</button>
+        </div>
+        <p id="callInfo" class="muted">Ожидание подключения...</p>
+        <article class="video-grid">
+          <div class="video-box">
+            <h3>Вы</h3>
+            <video id="localVideo" autoplay muted playsinline></video>
+          </div>
+          <div class="video-box">
+            <h3>Собеседник</h3>
+            <video id="remoteVideo" autoplay playsinline></video>
+          </div>
         </article>
-        <article class="video-card">
-          <h2>Собеседник</h2>
-          <video id="remoteVideo" autoplay playsinline></video>
-          <p id="remoteStatus" class="remote-status">Ожидание подключения...</p>
-        </article>
+        <div class="actions">
+          <button id="toggleCameraBtn" class="btn">Камера: вкл</button>
+          <button id="toggleMicBtn" class="btn">Микрофон: вкл</button>
+        </div>
       </section>
 
-      <section class="actions">
-        <button id="toggleCameraBtn" class="btn">Камера: вкл</button>
-        <button id="toggleMicBtn" class="btn">Микрофон: вкл</button>
+      <section id="inviteSection" class="panel hidden">
+        <h2>Входящие приглашения</h2>
+        <div id="inviteList" class="invite-list"></div>
       </section>
 
-      <section class="status-panel">
+      <section class="panel">
         <p id="status">Статус: инициализация...</p>
       </section>
     </main>
