@@ -21,7 +21,6 @@ module.exports = (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.status(200).json({
     apiBaseUrl: process.env.API_BASE_URL || "",
-    signalingUrl: process.env.SIGNALING_URL || "",
     iceServers: parseIceServers()
   });
 };

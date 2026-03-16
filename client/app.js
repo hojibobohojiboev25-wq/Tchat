@@ -12,14 +12,16 @@ const toggleMicBtn = document.getElementById("toggleMicBtn");
 let localStream = null;
 let remoteStream = null;
 let peerConnection = null;
-let socket = null;
 let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
 let apiBaseUrl = "";
-let signalingUrl = "";
 let currentRoomId = "";
-let peerSocketId = "";
-let cameraEnabled = true;
-let micEnabled = true;
+let targetPeerId = "";
+let pollTimer = null;
+let lastSignalId = 0;
+const selfPeerId = (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(
+  0,
+  24
+);
 
 function updateStatus(text) {
   statusEl.textContent = `Статус: ${text}`;
@@ -33,27 +35,46 @@ function buildApiUrl(path) {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
 }
 
-async function loadRuntimeConfig() {
-  const response = await fetch("/api/runtime-config");
+async function apiFetch(path, options = {}) {
+  const response = await fetch(buildApiUrl(path), {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
   if (!response.ok) {
-    throw new Error("Не удалось загрузить runtime-конфигурацию");
+    let message = `HTTP ${response.status}`;
+    try {
+      const payload = await response.json();
+      if (payload?.error) {
+        message = payload.error;
+      }
+    } catch (_) {}
+    throw new Error(message);
   }
 
-  const payload = await response.json();
-  if (Array.isArray(payload.iceServers) && payload.iceServers.length > 0) {
-    iceServers = payload.iceServers;
-  }
-  if (typeof payload.apiBaseUrl === "string") {
-    apiBaseUrl = payload.apiBaseUrl.trim().replace(/\/$/, "");
-  }
-  if (typeof payload.signalingUrl === "string") {
-    signalingUrl = payload.signalingUrl.trim().replace(/\/$/, "");
+  return response.json();
+}
+
+async function loadRuntimeConfig() {
+  try {
+    const payload = await apiFetch("/api/runtime-config");
+    if (Array.isArray(payload.iceServers) && payload.iceServers.length > 0) {
+      iceServers = payload.iceServers;
+    }
+    if (typeof payload.apiBaseUrl === "string" && payload.apiBaseUrl.trim()) {
+      apiBaseUrl = payload.apiBaseUrl.trim().replace(/\/$/, "");
+    }
+  } catch (_error) {
+    updateStatus("runtime-конфиг недоступен, работаем с дефолтом");
   }
 }
 
 async function startLocalMedia() {
   localStream = await navigator.mediaDevices.getUserMedia({
-    video: true,
+    video: { facingMode: "user" },
     audio: true
   });
   localVideoEl.srcObject = localStream;
@@ -67,9 +88,23 @@ function resetPeerConnection() {
     peerConnection.close();
     peerConnection = null;
   }
+
   remoteStream = new MediaStream();
   remoteVideoEl.srcObject = remoteStream;
   updateRemoteStatus("Ожидание подключения...");
+}
+
+async function sendSignal(type, payload, toPeerId) {
+  await apiFetch("/api/signal-send", {
+    method: "POST",
+    body: JSON.stringify({
+      roomId: currentRoomId,
+      fromPeerId: selfPeerId,
+      toPeerId,
+      type,
+      payload
+    })
+  });
 }
 
 function ensurePeerConnection() {
@@ -81,24 +116,16 @@ function ensurePeerConnection() {
   remoteStream = new MediaStream();
   remoteVideoEl.srcObject = remoteStream;
 
-  localStream.getTracks().forEach((track) => {
-    peerConnection.addTrack(track, localStream);
-  });
+  localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
 
-  peerConnection.onicecandidate = (event) => {
-    if (!event.candidate || !peerSocketId || !currentRoomId) {
+  peerConnection.onicecandidate = async (event) => {
+    if (!event.candidate || !targetPeerId) {
       return;
     }
-
-    socket.emit("webrtc-ice-candidate", {
-      roomId: currentRoomId,
-      targetPeerId: peerSocketId,
-      candidate: event.candidate
-    });
+    await sendSignal("ice", event.candidate, targetPeerId);
   };
 
   peerConnection.ontrack = (event) => {
-    // Remote stream can contain multiple tracks; merge all in one MediaStream.
     event.streams[0].getTracks().forEach((track) => remoteStream.addTrack(track));
     updateRemoteStatus("Собеседник подключен");
   };
@@ -106,26 +133,17 @@ function ensurePeerConnection() {
   return peerConnection;
 }
 
-async function createAndSetOffer(targetPeerId) {
+async function createAndSendOffer(peerId) {
+  targetPeerId = peerId;
   const pc = ensurePeerConnection();
-  peerSocketId = targetPeerId;
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-
-  socket.emit("webrtc-offer", {
-    roomId: currentRoomId,
-    targetPeerId,
-    offer
-  });
-  updateStatus("отправлен offer");
+  await sendSignal("offer", offer, peerId);
+  updateStatus("offer отправлен");
 }
 
 async function createRoom() {
-  const response = await fetch(buildApiUrl("/api/rooms"), { method: "POST" });
-  if (!response.ok) {
-    throw new Error("Не удалось создать комнату");
-  }
-  const payload = await response.json();
+  const payload = await apiFetch("/api/room-create", { method: "POST" });
   return payload.roomId;
 }
 
@@ -139,15 +157,83 @@ async function joinRoom(roomId) {
   roomIdInput.value = roomId;
   history.replaceState(null, "", `/?room=${encodeURIComponent(roomId)}`);
   roomHintEl.textContent = `Комната: ${roomId}. Скопируйте URL и отправьте собеседнику.`;
-  updateStatus(`подключение к комнате ${roomId}`);
-  socket.emit("join-room", { roomId });
+
+  const payload = await apiFetch("/api/room-join", {
+    method: "POST",
+    body: JSON.stringify({ roomId, peerId: selfPeerId })
+  });
+
+  const peers = payload.peers || [];
+  updateStatus(`в комнате участников: ${peers.length + 1}`);
+
+  if (peers.length > 0) {
+    await createAndSendOffer(peers[0]);
+  }
+
+  startPolling();
+}
+
+async function processSignal(signal) {
+  lastSignalId = Math.max(lastSignalId, signal.id || 0);
+
+  if (!signal || !signal.type || !signal.payload) {
+    return;
+  }
+
+  if (signal.type === "offer") {
+    targetPeerId = signal.from_peer_id;
+    const pc = ensurePeerConnection();
+    await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await sendSignal("answer", answer, targetPeerId);
+    updateStatus("offer получен, answer отправлен");
+    return;
+  }
+
+  if (signal.type === "answer" && peerConnection) {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.payload));
+    updateStatus("answer получен");
+    return;
+  }
+
+  if (signal.type === "ice" && peerConnection) {
+    try {
+      await peerConnection.addIceCandidate(new RTCIceCandidate(signal.payload));
+    } catch (_error) {}
+  }
+}
+
+function startPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+  }
+
+  pollTimer = setInterval(async () => {
+    if (!currentRoomId) {
+      return;
+    }
+    try {
+      const payload = await apiFetch(
+        `/api/signal-poll?roomId=${encodeURIComponent(currentRoomId)}&peerId=${encodeURIComponent(selfPeerId)}&afterId=${encodeURIComponent(lastSignalId)}`
+      );
+      const signals = payload.signals || [];
+      for (const signal of signals) {
+        await processSignal(signal);
+      }
+      if (payload.peerLeft) {
+        targetPeerId = "";
+        resetPeerConnection();
+        updateStatus("собеседник отключился");
+      }
+    } catch (_error) {}
+  }, 1200);
 }
 
 function toggleTrack(kind) {
   if (!localStream) {
     return;
   }
-
   const tracks = kind === "video" ? localStream.getVideoTracks() : localStream.getAudioTracks();
   if (!tracks[0]) {
     return;
@@ -157,90 +243,10 @@ function toggleTrack(kind) {
   const enabled = tracks[0].enabled;
 
   if (kind === "video") {
-    cameraEnabled = enabled;
     toggleCameraBtn.textContent = `Камера: ${enabled ? "вкл" : "выкл"}`;
   } else {
-    micEnabled = enabled;
     toggleMicBtn.textContent = `Микрофон: ${enabled ? "вкл" : "выкл"}`;
   }
-
-  if (currentRoomId) {
-    socket.emit("media-toggled", { roomId: currentRoomId, kind, enabled });
-  }
-}
-
-function setupSocket() {
-  const targetUrl = signalingUrl || undefined;
-  socket = io(targetUrl, {
-    transports: ["websocket", "polling"]
-  });
-
-  socket.on("connect", () => {
-    updateStatus("соединение с сигналинг-сервером установлено");
-  });
-
-  socket.on("room-error", ({ message }) => {
-    updateStatus(`ошибка комнаты: ${message}`);
-  });
-
-  socket.on("peers-in-room", async ({ peers }) => {
-    updateStatus(`в комнате участников: ${peers.length + 1}`);
-    if (peers.length > 0) {
-      await createAndSetOffer(peers[0]);
-    }
-  });
-
-  socket.on("peer-joined", async ({ peerId }) => {
-    updateStatus("новый участник подключился");
-    if (!peerSocketId) {
-      await createAndSetOffer(peerId);
-    }
-  });
-
-  socket.on("webrtc-offer", async ({ fromPeerId, offer }) => {
-    const pc = ensurePeerConnection();
-    peerSocketId = fromPeerId;
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    socket.emit("webrtc-answer", {
-      roomId: currentRoomId,
-      targetPeerId: fromPeerId,
-      answer
-    });
-    updateStatus("получен offer, отправлен answer");
-  });
-
-  socket.on("webrtc-answer", async ({ answer }) => {
-    if (!peerConnection) {
-      return;
-    }
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-    updateStatus("получен answer, соединение стабилизируется");
-  });
-
-  socket.on("webrtc-ice-candidate", async ({ candidate }) => {
-    if (!peerConnection || !candidate) {
-      return;
-    }
-    try {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (error) {
-      updateStatus(`ошибка ICE: ${error.message}`);
-    }
-  });
-
-  socket.on("peer-left", () => {
-    peerSocketId = "";
-    resetPeerConnection();
-    updateStatus("собеседник отключился");
-  });
-
-  socket.on("peer-media-toggled", ({ kind, enabled }) => {
-    const kindText = kind === "video" ? "камера" : "микрофон";
-    updateStatus(`собеседник: ${kindText} ${enabled ? "вкл" : "выкл"}`);
-  });
 }
 
 createRoomBtn.addEventListener("click", async () => {
@@ -248,28 +254,33 @@ createRoomBtn.addEventListener("click", async () => {
     const roomId = await createRoom();
     await joinRoom(roomId);
   } catch (error) {
-    updateStatus(error.message);
+    updateStatus(`ошибка: ${error.message}`);
   }
 });
 
 joinRoomBtn.addEventListener("click", async () => {
-  await joinRoom(roomIdInput.value.trim());
+  try {
+    await joinRoom(roomIdInput.value.trim());
+  } catch (error) {
+    updateStatus(`ошибка: ${error.message}`);
+  }
 });
 
 toggleCameraBtn.addEventListener("click", () => toggleTrack("video"));
 toggleMicBtn.addEventListener("click", () => toggleTrack("audio"));
 
 window.addEventListener("beforeunload", () => {
-  if (peerConnection) {
-    peerConnection.close();
+  if (currentRoomId) {
+    navigator.sendBeacon(
+      buildApiUrl("/api/room-leave"),
+      JSON.stringify({ roomId: currentRoomId, peerId: selfPeerId })
+    );
   }
 });
 
 async function boot() {
   try {
-    updateStatus("загрузка конфигурации");
     await loadRuntimeConfig();
-    setupSocket();
     await startLocalMedia();
     resetPeerConnection();
 
