@@ -22,9 +22,32 @@ const routes = {
 module.exports = async (req, res) => {
   try {
     const reqUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-    const handler = routes[reqUrl.pathname];
+    let routePath = reqUrl.pathname;
+    const rewrittenPath = reqUrl.searchParams.get("path");
+    if ((routePath === "/api/index.js" || routePath === "/api/index") && rewrittenPath) {
+      routePath = rewrittenPath.startsWith("/") ? rewrittenPath : `/${rewrittenPath}`;
+    }
+
+    if (["POST", "PUT", "PATCH"].includes(req.method) && typeof req.body === "undefined") {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      const raw = Buffer.concat(chunks).toString("utf8");
+      if (!raw) {
+        req.body = {};
+      } else {
+        try {
+          req.body = JSON.parse(raw);
+        } catch (_error) {
+          req.body = {};
+        }
+      }
+    }
+
+    const handler = routes[routePath];
     if (!handler) {
-      res.status(404).json({ error: "API route not found" });
+      res.status(404).json({ error: "API route not found", routePath });
       return;
     }
     await handler(req, res);
