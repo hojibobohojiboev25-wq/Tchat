@@ -1,0 +1,137 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #111827;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #22d3ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top, #1d4ed8, #0b1023 45%, #030712 100%);
+  min-height: 100vh;
+}
+
+.app {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.topbar h1 {
+  margin: 0;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.room-panel,
+.actions,
+.status-panel {
+  margin-top: 16px;
+  background: rgba(17, 24, 39, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.room-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.room-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+input {
+  flex: 1;
+  min-width: 220px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #0b1120;
+  background: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-light {
+  background: #cbd5e1;
+}
+
+.videos {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.video-card {
+  background: rgba(17, 24, 39, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  padding: 10px;
+  min-height: 320px;
+}
+
+.video-card h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+video {
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #020617;
+}
+
+.remote-status,
+.room-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#status {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (max-width: 860px) {
+  .videos {
+    grid-template-columns: 1fr;
+  }
+
+  video {
+    height: 240px;
+  }
+}

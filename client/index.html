@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tchat - Видеочат без регистрации</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <h1>Tchat</h1>
+        <p class="subtitle">Мгновенный видеочат без регистрации</p>
+      </header>
+
+      <section class="room-panel">
+        <label class="room-label" for="roomIdInput">Комната</label>
+        <div class="room-controls">
+          <input id="roomIdInput" type="text" placeholder="Введите ID комнаты" />
+          <button id="createRoomBtn" class="btn btn-light">Создать</button>
+          <button id="joinRoomBtn" class="btn">Подключиться</button>
+        </div>
+        <p id="roomHint" class="room-hint">Поделитесь ID комнаты с собеседником.</p>
+      </section>
+
+      <section class="videos">
+        <article class="video-card">
+          <h2>Вы</h2>
+          <video id="localVideo" autoplay muted playsinline></video>
+        </article>
+        <article class="video-card">
+          <h2>Собеседник</h2>
+          <video id="remoteVideo" autoplay playsinline></video>
+          <p id="remoteStatus" class="remote-status">Ожидание подключения...</p>
+        </article>
+      </section>
+
+      <section class="actions">
+        <button id="toggleCameraBtn" class="btn">Камера: вкл</button>
+        <button id="toggleMicBtn" class="btn">Микрофон: вкл</button>
+      </section>
+
+      <section class="status-panel">
+        <p id="status">Статус: инициализация...</p>
+      </section>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
