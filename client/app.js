@@ -20,6 +20,7 @@ let targetPeerId = "";
 let pollTimer = null;
 let lastSignalId = 0;
 let booted = false;
+const DEFAULT_ROOM_ID = "public";
 const selfPeerId = (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`).slice(
   0,
   24
@@ -169,10 +170,19 @@ async function joinRoom(roomId) {
     return;
   }
 
+  if (currentRoomId && currentRoomId !== roomId) {
+    try {
+      await apiFetch("/api/room-leave", {
+        method: "POST",
+        body: JSON.stringify({ roomId: currentRoomId, peerId: selfPeerId })
+      });
+    } catch (_error) {}
+  }
+
   currentRoomId = roomId;
   roomIdInput.value = roomId;
   history.replaceState(null, "", `/?room=${encodeURIComponent(roomId)}`);
-  roomHintEl.textContent = `Комната: ${roomId}. Скопируйте URL и отправьте собеседнику.`;
+  roomHintEl.textContent = `Комната: ${roomId}. Для быстрого теста откройте этот же URL на втором устройстве.`;
 
   const payload = await apiFetch("/api/room-join", {
     method: "POST",
@@ -320,8 +330,8 @@ async function boot() {
       return;
     }
 
-    const roomId = await createRoom();
-    await joinRoom(roomId);
+    // Default lobby helps two users connect immediately without sharing links.
+    await joinRoom(DEFAULT_ROOM_ID);
   } catch (error) {
     startChatBtn.disabled = false;
     if (error?.name === "NotAllowedError") {

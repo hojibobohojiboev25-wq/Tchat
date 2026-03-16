@@ -15,8 +15,32 @@
       "handle": "filesystem"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "src": "/api/runtime-config",
+      "dest": "/api/runtime-config.js"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/health.js"
+    },
+    {
+      "src": "/api/room-create",
+      "dest": "/api/room-create.js"
+    },
+    {
+      "src": "/api/room-join",
+      "dest": "/api/room-join.js"
+    },
+    {
+      "src": "/api/room-leave",
+      "dest": "/api/room-leave.js"
+    },
+    {
+      "src": "/api/signal-send",
+      "dest": "/api/signal-send.js"
+    },
+    {
+      "src": "/api/signal-poll",
+      "dest": "/api/signal-poll.js"
     },
     {
       "src": "/(.*)",

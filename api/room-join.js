@@ -19,6 +19,7 @@ module.exports = async (req, res) => {
     }
 
     await pool.query("INSERT INTO rooms (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [roomId]);
+    await pool.query("DELETE FROM room_peers WHERE room_id = $1 AND last_seen < NOW() - INTERVAL '90 seconds'", [roomId]);
 
     await pool.query(
       `
